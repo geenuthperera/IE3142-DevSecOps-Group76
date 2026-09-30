@@ -15,6 +15,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Verify runtime secrets
+        env:
+          COOKIE_SECRET: ${{ secrets.COOKIE_SECRET }}
+          CRYPTO_KEY: ${{ secrets.CRYPTO_KEY }}
+        run: |
+          test -n "$COOKIE_SECRET"
+          test -n "$CRYPTO_KEY"
+          echo "Required runtime secrets are available to the workflow."
+
       - name: Build Docker image
         run: docker build -t nodegoat:${{ github.sha }} .
 
