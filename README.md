@@ -1,166 +1,129 @@
-# NodeGoat
+# Building and Securing a DevSecOps Pipeline
 
-Being lightweight, fast, and scalable, Node.js is becoming a widely adopted platform for developing web applications. This project provides an environment to learn how OWASP Top 10 security risks apply to web applications developed using Node.js and how to effectively address them.
+**Module:** IE3142 – DevOps Security  
+**Institution:** Sri Lanka Institute of Information Technology (SLIIT)  
+**Project:** Group project using [OWASP NodeGoat](https://github.com/OWASP/NodeGoat)
 
-## Getting Started
+## Overview
 
-OWASP Top 10 for Node.js web applications:
+This project demonstrates how application security practices and automated security checks can be incorporated into a development workflow. The team used OWASP NodeGoat, an intentionally vulnerable Node.js training application, as the application under assessment.
 
-### Know it!
+The work covered threat modelling, selected application vulnerability remediations, containerisation, and the integration of security tools into GitHub Actions.
 
-This application bundled a tutorial page that explains the OWASP Top 10 vulnerabilities and how to fix them.
+## Project work
 
-Once the application is running, you can access the tutorial page at [http://localhost:4000/tutorial](http://localhost:4000/tutorial) (or the port you have configured).
+### Threat modelling
 
-### Do it!
+- Developed a threat model using the **STRIDE** methodology.
+- Considered threats affecting the application and its supporting components.
+- Documented the application architecture, trust boundaries, and relevant data flows.
 
-[A Vulnerable Node.js App for Ninjas](http://nodegoat.herokuapp.com/) to exploit, toast, and fix. You may like to [set up your own copy](#how-to-set-up-your-copy-of-nodegoat) of the app to fix and test vulnerabilities. Hint: Look for comments in the source code.
+### Application security improvements
 
-##### Default user accounts
+The project addressed selected weaknesses in the NodeGoat application:
 
-The database comes pre-populated with these user accounts created as part of the seed data -
-Admin account username: admin
-User accounts: user1, user2
+| Area | Improvement |
+|---|---|
+| Server-Side JavaScript Injection | Replaced evaluation of user-controlled contribution values with numeric conversion and validation. |
+| Stored Cross-Site Scripting (XSS) | HTML-encoded selected user-supplied profile fields before saving them. |
+| Insecure Direct Object Reference (IDOR) | Used the authenticated user's session ID when retrieving allocations instead of trusting the user ID supplied in the URL. |
+| Weak Password Policy | Added signup password validation requiring a minimum length and a combination of uppercase letters, lowercase letters, numbers, and special characters. |
+| Regular Expression Denial of Service (ReDoS) | Simplified a regular expression to avoid the nested greedy quantifier that could cause excessive backtracking. |
 
-Passwords are supplied at runtime using:
-SEED_ADMIN_PASSWORD
-SEED_USER1_PASSWORD
-SEED_USER2_PASSWORD
+These changes address selected issues for the scope of the academic project; they do not constitute a complete security review of NodeGoat.
 
-## How to Set Up Your Copy of NodeGoat
+## DevSecOps pipeline
 
-### OPTION 1 - Run NodeGoat on your machine
+GitHub Actions workflows automate application checks and security scans when code is pushed or pull requests are opened.
 
-1) Install [Node.js](http://nodejs.org/) - NodeGoat requires Node v8 or above
+| Tool / check | Purpose | Current workflow behaviour |
+|---|---|---|
+| **Semgrep (SAST)** | Static analysis to identify potentially insecure code patterns. | Findings are reported; the step is configured with `continue-on-error: true`. |
+| **npm audit (SCA)** | Checks project dependencies for known vulnerabilities. | Findings are reported; the step is configured with `continue-on-error: true`. |
+| **Gitleaks** | Scans repository history for accidentally committed secrets. | Configured to return a non-zero exit code when a secret is detected. |
+| **Trivy** | Scans the built Docker image for HIGH and CRITICAL vulnerabilities. | The scan is currently reporting-only because it uses `--exit-code 0`; unfixed findings are ignored. |
+| **Cypress** | Runs the configured end-to-end test suite. | Executed through a GitHub Actions workflow. |
+| **JSHint** | Performs JavaScript linting. | Executed through a GitHub Actions workflow. |
 
-2) Clone the github repository:
-   ```
-   git clone https://github.com/OWASP/NodeGoat.git
-   ```
+The container-security workflow also checks that the configured `COOKIE_SECRET` and `CRYPTO_KEY` GitHub Actions secrets are available to the workflow without printing their values. This availability check is not, by itself, proof of secret injection into a running container.
 
-3) Go to the directory:
-   ```
-   cd NodeGoat
-   ```
+### Workflow files
 
-4) Install node packages:
-   ```
-   npm install
-   ```
+- [SAST and dependency scanning](.github/workflows/sast-sca.yml)
+- [Secrets scanning with Gitleaks](.github/workflows/secrets-scan.yml)
+- [Docker build and image scanning with Trivy](.github/workflows/container-security.yml)
+- [End-to-end tests](.github/workflows/e2e-test.yml)
+- [Linting](.github/workflows/lint.yml)
 
-5) Set up MongoDB. You can either install MongoDB locally or create a remote instance:
+## Run the application locally
 
-   * Using local MongoDB:
-     1) Install [MongoDB Community Server](https://docs.mongodb.com/manual/administration/install-community/)
-     2) Start [mongod](http://docs.mongodb.org/manual/reference/program/mongod/#bin.mongod)
+### Prerequisites
 
-   * Using remote MongoDB instance:
-     1) [Deploy a MongoDB Atlas free tier cluster](https://docs.atlas.mongodb.com/tutorial/deploy-free-tier-cluster/) (M0 Sandbox)
-     2) [Enable network access](https://docs.atlas.mongodb.com/security/add-ip-address-to-list/) to the cluster from your current IP address
-     3) [Add a database user](https://docs.atlas.mongodb.com/tutorial/create-mongodb-user-for-cluster/) to the cluster
-     4) Set the `MONGODB_URI` environment variable to the connection string of your cluster, which can be viewed in the cluster's
-        [connect dialog](https://docs.atlas.mongodb.com/tutorial/connect-to-your-cluster/#connect-to-your-atlas-cluster). Select "Connect your application",
-        set the driver to "Node.js" and the version to "2.2.12 or later". This will give a connection string in the form:
-        ```
-        mongodb://<username>:<password>@<cluster>/<dbname>?ssl=true&replicaSet=<rsname>&authSource=admin&retryWrites=true&w=majority
-        ```
-        The `<username>` and `<password>` fields need filling in with the details of the database user added earlier. The `<dbname>` field sets the name of the
-        database nodegoat will use in the cluster (eg "nodegoat"). The other fields will already be filled in with the correct details for your cluster.
+- Docker
+- Docker Compose
 
-6) Populate MongoDB with the seed data required for the app:
-   ```
-   npm run db:seed
-   ```
-   By default this will use the "development" configuration, but the desired config can be passed as an argument if required.
+### Steps
 
-7) Start the server. You can run the server using node or nodemon:
-   * Start the server with node. This starts the NodeGoat application at [http://localhost:4000/](http://localhost:4000/):
-     ```
-     npm start
-     ```
-   * Start the server with nodemon, which will automatically restart the application when you make any changes. This starts the NodeGoat application at [http://localhost:5000/](http://localhost:5000/):
-     ```
-     npm run dev
-     ```
+1. Clone this repository:
 
-#### Customizing the Default Application Configuration
-
-By default the application will be hosted on port 4000 and will connect to a MongoDB instance at localhost:27017. To change this set the environment variables `PORT` and `MONGODB_URI`.
-
-Other settings can be changed by updating the [config file](https://github.com/OWASP/NodeGoat/blob/master/config/env/all.js).
-
-### OPTION 2 - Run NodeGoat on Docker
-
-The repo includes the Dockerfile and docker-compose.yml necessary to set up the app and db instance, then connect them together.
-
-1) Install [docker](https://docs.docker.com/installation/) and [docker compose](https://docs.docker.com/compose/install/)
-
-2) Clone the github repository:
-   ```
-   git clone https://github.com/OWASP/NodeGoat.git
+   ```bash
+   git clone https://github.com/geenuthperera/IE3142-DevSecOps-Group76.git
+   cd IE3142-DevSecOps-Group76
    ```
 
-3) Go to the directory:
-   ```
-   cd NodeGoat
-   ```
+2. Create a local environment file from the example:
 
-4) Build the images:
-   ```
-   docker-compose build
+   **macOS / Linux**
+   ```bash
+   cp .env.example .env
    ```
 
-5) Run the app, this starts the NodeGoat application at http://localhost:4000/:
+   **Windows PowerShell**
+   ```powershell
+   Copy-Item .env.example .env
    ```
-   docker-compose up
+
+3. Open `.env` and replace the placeholders with local values. For the Docker Compose setup in this repository, set the MongoDB connection string to:
+
+   ```text
+   MONGODB_URI=mongodb://mongo:27017/nodegoat
    ```
 
-### OPTION 3 - Deploy to Heroku
+   Set unique local values for the remaining secrets and seed-user passwords. Do not commit or share your `.env` file.
 
-This option uses a free ($0/month) Heroku node server.
+4. Build and start the application:
 
-Though not essential, it is recommended that you fork this repository and deploy the forked repo.
-This will allow you to fix vulnerabilities in your own forked version, then deploy and test it on Heroku.
-
-1) Set up a publicly accessible MongoDB instance:
-   1) [Deploy a MongoDB Atlas free tier cluster](https://docs.atlas.mongodb.com/tutorial/deploy-free-tier-cluster/) (M0 Sandbox)
-   2) [Enable network access](https://docs.atlas.mongodb.com/security/ip-access-list/#add-ip-access-list-entries) to the cluster from anywhere (CIDR range 0.0.0.0/0)
-   3) [Add a database user](https://docs.atlas.mongodb.com/tutorial/create-mongodb-user-for-cluster/) to the cluster
-
-2) Deploy NodeGoat to Heroku by clicking the button below:
-
-   [![Deploy](https://www.herokucdn.com/deploy/button.png)](https://heroku.com/deploy)
-
-   In the Create New App dialog, set the `MONGODB_URI` config var to the connection string of your MongoDB Atlas cluster.
-   This can be viewed in the cluster's [connect dialog](https://docs.atlas.mongodb.com/tutorial/connect-to-your-cluster/#connect-to-your-atlas-cluster).
-   Select "Connect your application", set the driver to "Node.js" and the version to "2.2.12 or later".
-   This will give a connection string in the form:
+   ```bash
+   docker compose up --build
    ```
-   mongodb://<username>:<password>@<cluster>/<dbname>?ssl=true&replicaSet=<rsname>&authSource=admin&retryWrites=true&w=majority
+
+5. Open the application in your browser:
+
+   [http://localhost:4000](http://localhost:4000)
+
+6. Stop the containers when finished:
+
+   ```bash
+   docker compose down
    ```
-   The `<username>` and `<password>` fields need filling in with the details of the database user added earlier. The `<dbname>` field sets the name of the
-   database nodegoat will use in the cluster (eg "nodegoat"). The other fields will already be filled in with the correct details for your cluster.
 
-## Report bugs, Feedback, Comments
+## Repository structure
 
-*  Open a new [issue](https://github.com/OWASP/NodeGoat/issues) or contact team by joining chat at [Slack](https://owasp.slack.com/messages/project-nodegoat/) or [![Join the chat at https://gitter.im/OWASP/NodeGoat](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/OWASP/NodeGoat?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+| Path | Description |
+|---|---|
+| `.github/workflows/` | GitHub Actions workflows for security scans, tests, and linting. |
+| `app/` | NodeGoat application source code, routes, views, and data access code. |
+| `artifacts/` | Supporting scripts and project artefacts. |
+| `config/` | Application configuration. |
+| `test/` | Application test files. |
+| `docs/` | Project documentation and technical report. |
 
-## Contributing
+## Project documentation
 
-Please Follow [the contributing guide](CONTRIBUTING.md)
+- [IE3142 Group 76 Technical Report (PDF)](docs/IE3142_Group_76_Technical_Report_DevOps.pdf)
 
-## Code Of Conduct (CoC)
+## Notes
 
-This project is bound by a [Code of Conduct](CODE_OF_CONDUCT.md).
+This is an educational project based on an intentionally vulnerable training application. Only selected vulnerabilities were addressed as part of the project. It is not intended for production use; run it in a controlled local environment.
 
-## Contributors
-
-Here are the amazing [contributors](https://github.com/OWASP/NodeGoat/graphs/contributors) to the NodeGoat project.
-
-## Supports
-
-- Thanks to JetBrains for providing licenses to fantastic [WebStorm IDE](https://www.jetbrains.com/webstorm/) to build this project.
-
-## License
-
-Code licensed under the [Apache License v2.0.](http://www.apache.org/licenses/LICENSE-2.0)
+The application is based on [OWASP NodeGoat](https://github.com/OWASP/NodeGoat). Refer to the repository's [LICENSE](LICENSE) for licensing information.
