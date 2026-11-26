@@ -16,40 +16,38 @@ The diagram below illustrates the NodeGoat deployment, including the browser-to-
 
 ![OWASP NodeGoat deployment architecture and trust boundaries](docs/diagrams/System%20Architecture.png)
 
-## GitHub Actions workflow overview
+## GitHub Actions security workflow overview
 
-The repository has five independent GitHub Actions workflows. The diagram groups them by purpose; it does not represent one sequential pipeline.
+The project implements the four security checks specified in the assignment across three independent GitHub Actions workflows. Semgrep and npm audit share the SAST/dependency workflow; Gitleaks and Trivy run in their respective workflows.
 
 ```mermaid
 flowchart TB
-    EVENTS["GitHub repository events"]
+    EVENTS["Push to main<br/>Pull request to main<br/>Manual dispatch"]
 
-    EVENTS --> SEC_TRIGGER["Security workflows<br/>Push to main · PR to main · Manual run"]
-    EVENTS --> QA_TRIGGER["Testing workflows<br/>Push · Pull request"]
-
-    subgraph SECURITY["Security scanning"]
+    subgraph SECURITY["Automated security checks"]
         direction LR
-        SAST["SAST / SCA<br/>Semgrep · npm audit"]
-        GITLEAKS["Secret scanning<br/>Gitleaks"]
-        TRIVY["Container scanning<br/>Docker build · Trivy"]
+        SAST["Static analysis<br/>Semgrep"]
+        SCA["Dependency scanning<br/>npm audit"]
+        GITLEAKS["Secrets scanning<br/>Gitleaks"]
+        TRIVY["Container image scanning<br/>Docker build · Trivy"]
     end
 
-    subgraph QUALITY["Testing & code quality"]
-        direction LR
-        CYPRESS["End-to-end tests<br/>Cypress"]
-        JSHINT["Linting<br/>JSHint"]
-    end
-
-    SEC_TRIGGER --> SAST
-    SEC_TRIGGER --> GITLEAKS
-    SEC_TRIGGER --> TRIVY
-    QA_TRIGGER --> CYPRESS
-    QA_TRIGGER --> JSHINT
+    EVENTS --> SAST
+    EVENTS --> SCA
+    EVENTS --> GITLEAKS
+    EVENTS --> TRIVY
 ```
 
-**Workflow triggers:** The security workflows run on pushes to `main`, pull requests targeting `main`, and manual dispatch. The E2E and lint workflows run on push and pull-request events without a branch filter.
+The three security workflows run on pushes to `main`, pull requests targeting `main`, and manual dispatch.
 
-**Security-check behaviour:** Semgrep and npm audit are reporting-only because their steps use `continue-on-error: true`. Gitleaks is configured to fail when it detects a secret. Trivy is reporting-only because it uses `--exit-code 0`. The container workflow checks that `COOKIE_SECRET` and `CRYPTO_KEY` are available to the GitHub Actions job; this does not prove they are injected into a running container.
+| Security check | Purpose | Current workflow behaviour |
+|---|---|---|
+| **Semgrep (SAST)** | Identifies potentially insecure source-code patterns. | Reporting-only; the step uses `continue-on-error: true`. |
+| **npm audit (SCA)** | Checks project dependencies for known vulnerabilities. | Reporting-only; the step uses `continue-on-error: true`. |
+| **Gitleaks** | Detects secrets committed to the repository history. | Blocking gate; exits with a non-zero status when a secret is detected. |
+| **Trivy** | Scans the built Docker image for HIGH and CRITICAL vulnerabilities. | Reporting-only; uses `--exit-code 0` and ignores unfixed findings. |
+
+The container-security workflow also checks that `COOKIE_SECRET` and `CRYPTO_KEY` are available to the GitHub Actions job without printing their values. This check does not prove that the secrets are injected into a running container.
 
 ## Project work
 
@@ -61,7 +59,7 @@ flowchart TB
 
 ### Application security improvements
 
-The project addressed selected weaknesses in the NodeGoat application:
+The project demonstrated and remediated four application vulnerabilities. The STRIDE threat model also records an additional ReDoS control:
 
 | Area | Improvement |
 |---|---|
@@ -69,13 +67,13 @@ The project addressed selected weaknesses in the NodeGoat application:
 | Stored Cross-Site Scripting (XSS) | HTML-encoded selected user-supplied profile fields before saving them. |
 | Insecure Direct Object Reference (IDOR) | Used the authenticated user's session ID when retrieving allocations instead of trusting the user ID supplied in the URL. |
 | Weak Password Policy | Added signup password validation requiring a minimum length and a combination of uppercase letters, lowercase letters, numbers, and special characters. |
-| Regular Expression Denial of Service (ReDoS) | Simplified a regular expression to avoid the nested greedy quantifier that could cause excessive backtracking. |
+| Additional ReDoS threat-model control | Replaced the unsafe nested-quantifier regular expression with safer validation; this is recorded in the threat-to-control mapping rather than one of the four exploit-and-fix walkthroughs. |
 
 These changes address selected issues for the scope of the academic project; they do not constitute a complete security review of NodeGoat.
 
 ## DevSecOps pipeline
 
-GitHub Actions workflows automate application checks and security scans when code is pushed or pull requests are opened.
+GitHub Actions automates the four security checks on pushes to `main` and pull requests targeting `main`.
 
 | Tool / check | Purpose | Current workflow behaviour |
 |---|---|---|
@@ -83,8 +81,6 @@ GitHub Actions workflows automate application checks and security scans when cod
 | **npm audit (SCA)** | Checks project dependencies for known vulnerabilities. | Findings are reported; the step is configured with `continue-on-error: true`. |
 | **Gitleaks** | Scans repository history for accidentally committed secrets. | Configured to return a non-zero exit code when a secret is detected. |
 | **Trivy** | Scans the built Docker image for HIGH and CRITICAL vulnerabilities. | The scan is currently reporting-only because it uses `--exit-code 0`; unfixed findings are ignored. |
-| **Cypress** | Runs the configured end-to-end test suite. | Executed through a GitHub Actions workflow. |
-| **JSHint** | Performs JavaScript linting. | Executed through a GitHub Actions workflow. |
 
 The container-security workflow also checks that the configured `COOKIE_SECRET` and `CRYPTO_KEY` GitHub Actions secrets are available to the workflow without printing their values. This availability check is not, by itself, proof of secret injection into a running container.
 
@@ -93,8 +89,6 @@ The container-security workflow also checks that the configured `COOKIE_SECRET` 
 - [SAST and dependency scanning](.github/workflows/sast-sca.yml)
 - [Secrets scanning with Gitleaks](.github/workflows/secrets-scan.yml)
 - [Docker build and image scanning with Trivy](.github/workflows/container-security.yml)
-- [End-to-end tests](.github/workflows/e2e-test.yml)
-- [Linting](.github/workflows/lint.yml)
 
 ## Run the application locally
 
@@ -152,7 +146,7 @@ The container-security workflow also checks that the configured `COOKIE_SECRET` 
 
 | Path | Description |
 |---|---|
-| `.github/workflows/` | GitHub Actions workflows for security scans, tests, and linting. |
+| `.github/workflows/` | GitHub Actions workflows for the project's security scans. |
 | `app/` | NodeGoat application source code, routes, views, and data access code. |
 | `artifacts/` | Supporting scripts and project artefacts. |
 | `config/` | Application configuration. |
