@@ -16,60 +16,40 @@ The diagram below illustrates the NodeGoat deployment, including the browser-to-
 
 ![OWASP NodeGoat deployment architecture and trust boundaries](docs/diagrams/System%20Architecture.png)
 
-## CI/CD workflow architecture
+## GitHub Actions workflow overview
 
-The repository contains five independent GitHub Actions workflows. They are triggered by repository events and run separately; they are not configured as one sequential pipeline.
-
-- The SAST/SCA, Gitleaks, and container-security workflows run on pushes to `main`, pull requests targeting `main`, and manual dispatch.
-- The E2E and lint workflows run on pushes and pull requests without a branch filter.
+The repository has five independent GitHub Actions workflows. The diagram groups them by purpose; it does not represent one sequential pipeline.
 
 ```mermaid
 flowchart TB
-    EV["GitHub repository events"] --> SEC["Security workflows<br/>push to main · PR to main · manual dispatch"]
-    EV --> QA["Quality and test workflows<br/>push · pull_request"]
+    EVENTS["GitHub repository events"]
 
-    SEC --> SAST
-    SEC --> GIT
-    SEC --> CONT
-    QA --> E2E
-    QA --> LINT
+    EVENTS --> SEC_TRIGGER["Security workflows<br/>Push to main · PR to main · Manual run"]
+    EVENTS --> QA_TRIGGER["Testing workflows<br/>Push · Pull request"]
 
-    subgraph SAST["SAST and dependency scanning"]
-        direction TB
-        S1["Checkout"] --> S2["Semgrep SAST<br/>findings are reporting-only"]
-        S2 --> S3["Set up Node.js 12<br/>install dependencies"]
-        S3 --> S4["npm audit<br/>findings are reporting-only"]
+    subgraph SECURITY["Security scanning"]
+        direction LR
+        SAST["SAST / SCA<br/>Semgrep · npm audit"]
+        GITLEAKS["Secret scanning<br/>Gitleaks"]
+        TRIVY["Container scanning<br/>Docker build · Trivy"]
     end
 
-    subgraph GIT["Secrets scanning"]
-        direction TB
-        G1["Checkout full Git history"] --> G2["Gitleaks detect"]
-        G2 --> G3["Fails when a secret is detected"]
+    subgraph QUALITY["Testing & code quality"]
+        direction LR
+        CYPRESS["End-to-end tests<br/>Cypress"]
+        JSHINT["Linting<br/>JSHint"]
     end
 
-    subgraph CONT["Container security"]
-        direction TB
-        C1["Checkout"] --> C2["Verify COOKIE_SECRET<br/>and CRYPTO_KEY are available"]
-        C2 --> C3["Build Docker image"]
-        C3 --> C4["Trivy: HIGH and CRITICAL"]
-        C4 --> C5["Report-only scan<br/>--exit-code 0"]
-    end
-
-    subgraph E2E["End-to-end testing"]
-        direction TB
-        E1["Node.js matrix<br/>10.x · 12.x · 14.x"] --> E2["Install dependencies<br/>verify Cypress"]
-        E2 --> E3["Start MongoDB 4.0"]
-        E3 --> E4["Run Cypress E2E suite"]
-        E4 --> E5["Upload Cypress artifacts<br/>when the test suite fails"]
-    end
-
-    subgraph LINT["Linting"]
-        direction TB
-        L1["Node.js 14.x"] --> L2["Run JSHint"]
-    end
+    SEC_TRIGGER --> SAST
+    SEC_TRIGGER --> GITLEAKS
+    SEC_TRIGGER --> TRIVY
+    QA_TRIGGER --> CYPRESS
+    QA_TRIGGER --> JSHINT
 ```
 
-**Workflow interpretation:** Semgrep and npm audit findings do not fail their job because those scan steps use `continue-on-error: true`. Gitleaks is configured to fail when it detects a secret. Trivy reports HIGH/CRITICAL findings but does not fail the job because it uses `--exit-code 0`. The container workflow checks that the two GitHub Actions secrets are available to the workflow; this check does not prove they are injected into a running container.
+**Workflow triggers:** The security workflows run on pushes to `main`, pull requests targeting `main`, and manual dispatch. The E2E and lint workflows run on push and pull-request events without a branch filter.
+
+**Security-check behaviour:** Semgrep and npm audit are reporting-only because their steps use `continue-on-error: true`. Gitleaks is configured to fail when it detects a secret. Trivy is reporting-only because it uses `--exit-code 0`. The container workflow checks that `COOKIE_SECRET` and `CRYPTO_KEY` are available to the GitHub Actions job; this does not prove they are injected into a running container.
 
 ## Project work
 
