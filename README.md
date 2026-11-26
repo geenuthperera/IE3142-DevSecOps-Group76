@@ -10,6 +10,12 @@ This project demonstrates how application security practices and automated secur
 
 The work covered threat modelling, selected application vulnerability remediations, containerisation, and the integration of security tools into GitHub Actions.
 
+## System architecture
+
+The diagram below illustrates the NodeGoat deployment, including the browser-to-web application flow, the web-to-MongoDB connection, Docker boundaries, trust boundaries, and runtime configuration.
+
+![OWASP NodeGoat deployment architecture and trust boundaries](docs/diagrams/System%20Architecture.png)
+
 ## Project work
 
 ### Threat modelling
@@ -117,10 +123,12 @@ The container-security workflow also checks that the configured `COOKIE_SECRET` 
 | `config/` | Application configuration. |
 | `test/` | Application test files. |
 | `docs/` | Project documentation and technical report. |
+| `docs/diagrams/` | System architecture diagram. |
 
 ## Project documentation
 
 - [IE3142 Group 76 Technical Report (PDF)](docs/IE3142_Group_76_Technical_Report_DevOps.pdf)
+- [System architecture diagram (PNG)](docs/diagrams/System%20Architecture.png)
 
 ## Notes
 
