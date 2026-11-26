@@ -16,6 +16,61 @@ The diagram below illustrates the NodeGoat deployment, including the browser-to-
 
 ![OWASP NodeGoat deployment architecture and trust boundaries](docs/diagrams/System%20Architecture.png)
 
+## CI/CD workflow architecture
+
+The repository contains five independent GitHub Actions workflows. They are triggered by repository events and run separately; they are not configured as one sequential pipeline.
+
+- The SAST/SCA, Gitleaks, and container-security workflows run on pushes to `main`, pull requests targeting `main`, and manual dispatch.
+- The E2E and lint workflows run on pushes and pull requests without a branch filter.
+
+```mermaid
+flowchart TB
+    EV["GitHub repository events"] --> SEC["Security workflows<br/>push to main · PR to main · manual dispatch"]
+    EV --> QA["Quality and test workflows<br/>push · pull_request"]
+
+    SEC --> SAST
+    SEC --> GIT
+    SEC --> CONT
+    QA --> E2E
+    QA --> LINT
+
+    subgraph SAST["SAST and dependency scanning"]
+        direction TB
+        S1["Checkout"] --> S2["Semgrep SAST<br/>findings are reporting-only"]
+        S2 --> S3["Set up Node.js 12<br/>install dependencies"]
+        S3 --> S4["npm audit<br/>findings are reporting-only"]
+    end
+
+    subgraph GIT["Secrets scanning"]
+        direction TB
+        G1["Checkout full Git history"] --> G2["Gitleaks detect"]
+        G2 --> G3["Fails when a secret is detected"]
+    end
+
+    subgraph CONT["Container security"]
+        direction TB
+        C1["Checkout"] --> C2["Verify COOKIE_SECRET<br/>and CRYPTO_KEY are available"]
+        C2 --> C3["Build Docker image"]
+        C3 --> C4["Trivy: HIGH and CRITICAL"]
+        C4 --> C5["Report-only scan<br/>--exit-code 0"]
+    end
+
+    subgraph E2E["End-to-end testing"]
+        direction TB
+        E1["Node.js matrix<br/>10.x · 12.x · 14.x"] --> E2["Install dependencies<br/>verify Cypress"]
+        E2 --> E3["Start MongoDB 4.0"]
+        E3 --> E4["Run Cypress E2E suite"]
+        E4 --> E5["Upload Cypress artifacts<br/>when the test suite fails"]
+    end
+
+    subgraph LINT["Linting"]
+        direction TB
+        L1["Node.js 14.x"] --> L2["Run JSHint"]
+    end
+```
+
+**Workflow interpretation:** Semgrep and npm audit findings do not fail their job because those scan steps use `continue-on-error: true`. Gitleaks is configured to fail when it detects a secret. Trivy reports HIGH/CRITICAL findings but does not fail the job because it uses `--exit-code 0`. The container workflow checks that the two GitHub Actions secrets are available to the workflow; this check does not prove they are injected into a running container.
+
 ## Project work
 
 ### Threat modelling
